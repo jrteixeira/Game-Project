@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?>  
+<mod name="RankHit" version="1.0" author="Vodkart e Jhon" contact="xtibia.com" enabled="yes">  
+<config name="rank_func"><![CDATA[
+WEAPON_WAND = {2190, 2191, 2188, 8921, 2189, 2187, 8920, 8922, 2184, 7414, 2453}
+WEAPON_ROD = {2182, 2186, 2185, 8911, 2181, 2183, 8912, 8910, 7958, 12609}
+storage_mostdamage = {
+CLUB = {155201,156201},
+SWORD = {155202,156202},
+AXE = {155203,156203},
+WAND = {155204,156204},
+ROD = {155205,156205},
+DISTANCE = {155206,156206},
+MAGIC_SD = {155207,156207,157207}
+}
+function setSdHit(cid, damage)
+if damage > getPlayerStorageValue(cid, storage_mostdamage.MAGIC_SD[1]) then
+setPlayerStorageValue(cid, storage_mostdamage.MAGIC_SD[1], damage)
+setPlayerStorageValue(cid, storage_mostdamage.MAGIC_SD[2], 2268)
+end
+return true
+end
+function setPlayerMostHitMage(cid, damage, weapon)
+if isInArray(WEAPON_WAND, getPlayerSlotItem(cid, CONST_SLOT_LEFT).itemid) == TRUE or isInArray(WEAPON_WAND, getPlayerSlotItem(cid, CONST_SLOT_RIGHT).itemid) == TRUE then
+if damage > getPlayerStorageValue(cid, storage_mostdamage.WAND[1]) then setPlayerStorageValue(cid, storage_mostdamage.WAND[1], damage) setPlayerStorageValue(cid, storage_mostdamage.WAND[2], weapon) end
+elseif isInArray(WEAPON_ROD, getPlayerSlotItem(cid, CONST_SLOT_LEFT).itemid) == TRUE or isInArray(WEAPON_ROD, getPlayerSlotItem(cid, CONST_SLOT_RIGHT).itemid) == TRUE then
+if damage > getPlayerStorageValue(cid, storage_mostdamage.ROD[1]) then setPlayerStorageValue(cid, storage_mostdamage.ROD[1], damage) setPlayerStorageValue(cid, storage_mostdamage.ROD[2], weapon) end
+end
+return true
+end
+function getRankHit(cid, value, wvalue, max, RankName) -- by vodka
+local str,arm ="",""
+str = "--[".. (RankName == nil and "RANK STORAGE" or ""..RankName.."") .."]--\n\n"
+local query = db.getResult("SELECT `player_id`, `value` FROM `player_storage` WHERE `key` = "..value.." ORDER BY cast(value as INTEGER) DESC;")
+if (query:getID() ~= -1) then k = 1 repeat if k > max then break end
+local getweapon = db.getResult("SELECT `value` FROM `player_storage` WHERE `player_id` = ".. query:getDataString("player_id") .." AND `key` = "..wvalue)
+if (getweapon:getID() ~= -1) then
+arm = getItemNameById(getweapon:getDataString("value"))
+end
+str = str .. "\n " .. k .. ". "..getPlayerNameByGUID(query:getDataString("player_id")).." - [" .. query:getDataInt("value") .. "] - "..arm..""
+k = k + 1 until not query:next() end return doPlayerPopupFYI(cid, str)
+end
+function haveWeapon(cid) -- by vodka
+local armas = {1,2,3,5,6}
+if getPlayerSlotItem(cid, CONST_SLOT_RIGHT).itemid > 0 and isInArray(armas, getItemWeaponType(getPlayerSlotItem(cid, CONST_SLOT_RIGHT).uid)) or getPlayerSlotItem(cid, CONST_SLOT_LEFT).itemid > 0 and isInArray(armas, getItemWeaponType(getPlayerSlotItem(cid, CONST_SLOT_LEFT).uid)) then
+return true
+end
+return false
+end
+function getWeaponType(cid) -- by vodka
+return getPlayerSlotItem(cid, CONST_SLOT_LEFT).itemid == 0 and getItemWeaponType(getPlayerSlotItem(cid, CONST_SLOT_RIGHT).uid) or getItemWeaponType(getPlayerSlotItem(cid, CONST_SLOT_LEFT).uid)
+end
+]]></config>
+<talkaction words="/rankhit;!rankhit" event="buffer"><![CDATA[
+domodlib('rank_func')
+local rank_hit = {
+["axe"] = {storage_mostdamage.AXE[1],storage_mostdamage.AXE[2]},
+["sword"] = {storage_mostdamage.SWORD[1],storage_mostdamage.SWORD[2]},
+["club"] = {storage_mostdamage.CLUB[1],storage_mostdamage.CLUB[2]},
+["wand"] = {storage_mostdamage.WAND[1],storage_mostdamage.WAND[2]},
+["rod"] = {storage_mostdamage.ROD[1],storage_mostdamage.ROD[2]},
+["distance"] = {storage_mostdamage.DISTANCE[1],storage_mostdamage.DISTANCE[2]},
+["sd"] = {storage_mostdamage.MAGIC_SD[1],storage_mostdamage.MAGIC_SD[2]}
+}
+local param = string.lower(param)
+if (param == "") then
+local str = ""
+str = str .. ""..getCreatureName(cid).." Hit\'s\:\n\n"
+for hit, item in pairs(rank_hit) do
+str = str..string.upper(hit)..": ".. (getPlayerStorageValue(cid, item[1]) ~= -1 and "["..getPlayerStorageValue(cid, item[1]).."] - "..getItemNameById(getPlayerStorageValue(cid, item[2])).."" or "None") .."\n"
+end
+str = str .. ""
+doPlayerPopupFYI(cid,str)
+return true
+end
+if not rank_hit[param] then
+return doPlayerSendTextMessage(cid, MESSAGE_STATUS_CONSOLE_BLUE,"digite o nome correto.")
+end
+return getRankHit(cid, rank_hit[param][1],rank_hit[param][2], 10, "Rank "..param)
+]]></talkaction>
+<event type="login" name="Rank Hit" event="script"><![CDATA[  
+domodlib('rank_func')
+function onLogin(cid)
+registerCreatureEvent(cid, "RankhitCombat")
+return true  
+end  
+]]></event>
+<event type="combat" name="RankhitCombat" event="script"><![CDATA[
+domodlib('rank_func')
+				 registerCreatureEvent(target, "RankhitStats")
+return true
+]]></event>
+<event type="statschange" name="RankhitStats" event="script"><![CDATA[
+domodlib('rank_func')
+if type == STATSCHANGE_HEALTHLOSS and isPlayer(attacker) and haveWeapon(attacker) then
+t = {
+[1] = {storage_mostdamage.SWORD[1],storage_mostdamage.SWORD[2]},
+[2] = {storage_mostdamage.CLUB[1],storage_mostdamage.CLUB[2]},
+[3] = {storage_mostdamage.AXE[1],storage_mostdamage.AXE[2]},
+[5] = {storage_mostdamage.DISTANCE[1],storage_mostdamage.DISTANCE[2]}
+}
+MyWeapon = getPlayerSlotItem(attacker, CONST_SLOT_LEFT).itemid == 0 and getPlayerSlotItem(attacker, CONST_SLOT_RIGHT).itemid or getPlayerSlotItem(attacker, CONST_SLOT_LEFT).itemid
+if (getPlayerStorageValue(attacker, storage_mostdamage.MAGIC_SD[3]) >= os.time()) then
+setSdHit(attacker,value)
+elseif t[getWeaponType(attacker)] then
+if value > getPlayerStorageValue(attacker, t[getWeaponType(attacker)][1]) then
+setPlayerStorageValue(attacker, t[getWeaponType(attacker)][1], value)
+setPlayerStorageValue(attacker, t[getWeaponType(attacker)][2], MyWeapon)
+end
+else
+setPlayerMostHitMage(attacker, value, MyWeapon)
+end  
+end
+return true
+]]></event>
+</mod>

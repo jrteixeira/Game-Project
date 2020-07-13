@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mod name="Criminal System" version="v2.0" author="Kimoszin" contact="tibiaking.com" enabled="yes">
+        <config name="criminal_config"><![CDATA[
+                CONST_CIVIL = -1
+                CONST_THIEF = 0
+                CONST_COP = 1
+ 
+                criminal = {
+                        config = {
+                                storageOnJail = 97433,
+                                storageJailTime = 97434,
+                                storageStatus = 97436,
+                                storagePlayerCount = 97437,
+                                storageMoneyCount = 97438,
+ 
+                                minSteal = 300,
+                                maxSteal = 1400,
+                                prisonPos = {x=158, y=18, z=9},
+                                jailTime = 15,
+                        },
+ 
+                        status = {
+                                [CONST_CIVIL] = CONST_CIVIL,
+                                [CONST_THIEF] = CONST_THIEF,
+                                [CONST_COP] = CONST_COP,
+                        },
+ 
+                        message = {
+                                changedStatus = "You are now a %s.",
+                                noMoney = "The player %s does not have %s gps.",
+                                sucessSteal = "You have just been stolen by the player %s, and lost %s gp.",
+                                sucessStealToThief = "You stole player %s and gained %s gps.",
+                                onJail = "You have been arrested for assaulting %s players and robbing %s gps.",
+                                notJail = "You're a free man now.",
+                                jailTimeLeft = "There are still %s seconds to leave you.",
+                                failArrest = "This player has not committed any crime.",
+                                sucessArrest = "You gained %s gps by arrest a thug."
+                        },
+ 
+                        getStatus = function(self, uid)
+                                return (isPlayer(uid) and self.status[getCreatureStorage(uid, self.config.storageStatus)])
+                        end,
+ 
+                        getStatusName = function(self, uid)
+                                return (isPlayer(uid) and self:getStatus(uid) == CONST_CIVIL and "civil" or self:getStatus(uid) == CONST_THIEF and "thief" or "cop")
+                        end,
+ 
+                        getJailTime = function(self, uid)
+                                return (isPlayer(uid) and (getCreatureStorage(uid, self.config.storageJailTime) - os.time()))
+                        end,
+ 
+                        getPlayersAssaultedCount = function(self, uid)
+                                return (isPlayer(uid) and getCreatureStorage(uid, self.config.storagePlayerCount))
+                        end,
+ 
+                        getMoneyAssaulted = function(self, uid)
+                                return (isPlayer(uid) and getCreatureStorage(uid, self.config.storageMoneyCount))
+                        end,
+ 
+                        doSetPlayersAssaultedCount = function(self, uid, count)
+                                return setPlayerStorageValue(uid, self.config.storagePlayerCount, getCreatureStorage(uid, self.config.storagePlayerCount) + count)
+                        end,
+ 
+                        doSetPlayersMoneyAssaultedCount = function(self, uid, count)
+                                return setPlayerStorageValue(uid, self.config.storageMoneyCount, getCreatureStorage(uid, self.config.storageMoneyCount) + count)
+                        end,
+ 
+                        doResetPlayerAndMoneyAssaulted = function(self, uid)
+                                return setPlayerStorageValue(uid, self.config.storagePlayerCount, 0) and setPlayerStorageValue(uid, self.config.storageMoneyCount, 0)
+                        end,
+ 
+                        doWarning = function(self, uid, text)
+                                return (isPlayer(uid) and doPlayerSendTextMessage(uid, MESSAGE_EVENT_ADVANCE, text))
+                        end,
+ 
+                        doSetStatus = function(self, uid, status)
+                                return (isPlayer(uid) and setPlayerStorageValue(uid, self.config.storageStatus, status) and self:doWarning(uid, self.message.changedStatus:format(self:getStatusName(uid))))
+                        end,
+ 
+                        doSetJailTime = function(self, uid, time)
+                                return (isPlayer(uid) and setPlayerStorageValue(uid, self.config.storageJailTime, os.time() + self.config.jailTime * 60))
+                        end,
+ 
+                        doSteal = function(self, uid, pid)
+                                if not(uid ~= pid and isPlayer(pid)) then
+                                        return false
+                                end
+ 
+                                local moneySteal = math.random(self.config.minSteal, self.config.maxSteal)
+                                if not(doPlayerRemoveMoney(pid, moneySteal)) then
+                                        return self:doWarning(uid, self.message.noMoney:format(getCreatureName(pid), moneySteal))
+                                end
+ 
+                                if not(self:getStatus(cid) == CONST_THIEF) then
+                                        self:doSetStatus(uid, CONST_THIEF)
+                                end
+ 
+                                doSendAnimatedText(getCreaturePosition(pid), "-"..moneySteal.."", 180)
+                                self:doWarning(pid, self.message.sucessSteal:format(getCreatureName(uid), moneySteal))
+ 
+                                doSendAnimatedText(getCreaturePosition(uid), "+"..moneySteal.."", 18)
+                                self:doWarning(uid, self.message.sucessStealToThief:format(getCreatureName(pid), moneySteal))
+                                self:doSetPlayersAssaultedCount(uid, 1)
+                                self:doSetPlayersMoneyAssaultedCount(uid, moneySteal)
+                                return doPlayerAddMoney(uid, moneySteal) and true
+                        end,
+ 
+                        doArrest = function(self, uid, pid)
+                                if not(uid ~= pid and isPlayer(pid)) then
+                                        return false
+                                end
+ 
+                                if not(self:getStatus(pid) == CONST_THIEF) then
+                                        return self:doWarning(uid, self.message.failArrest)
+                                end
+ 
+ 
+                                local moneyReward = self:getMoneyAssaulted(pid)
+                                setPlayerStorageValue(pid, self.config.storageOnJail, 1)
+                                self:doWarning(pid, self.message.onJail:format(self:getPlayersAssaultedCount(pid), self:getMoneyAssaulted(pid)))
+                                self:doSetJailTime(pid, self.config.jailTime)
+                                doTeleportThing(pid, self.config.prisonPos)
+                                self:doWarning(uid, self.message.sucessArrest:format(moneyReward))
+                                doPlayerAddMoney(uid, moneyReward)
+                                return self:doResetPlayerAndMoneyAssaulted(pid) and true
+                        end,
+ 
+                        isOnJail = function(self, uid)
+                                return (isPlayer(uid) and getCreatureStorage(uid, self.config.storageOnJail) > 0 and true or false)
+                        end,
+                }
+        ]]></config>
+ 
+        <action itemid="7409;7735" event="buffer"><![CDATA[
+                domodlib("criminal_config")
+ 
+                if (item.itemid == 7735) then
+                        return criminal:doSteal(cid, itemEx.uid)
+                end
+ 
+                if (item.itemid == 7409) then
+                        return criminal:doArrest(cid, itemEx.uid)
+                end
+        ]]></action>
+ 
+        <action actionid="1256" event="buffer"><![CDATA[
+                domodlib("criminal_config")
+               
+                if not(criminal:getJailTime(cid) <= 0) then
+                        return criminal:doWarning(cid, criminal.message.jailTimeLeft:format(criminal:getJailTime(cid)))
+                end
+ 
+                if (criminal:isOnJail(cid)) then
+                        return criminal:doSetStatus(cid, CONST_CIVIL) and doTeleportThing(cid, toPosition) and setPlayerStorageValue(cid, criminal.config.storageOnJail, -1) and true
+                else
+                        return criminal:doWarning(cid, criminal.message.notJail)
+                end
+        ]]></action>
+</mod>
